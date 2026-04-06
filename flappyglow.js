@@ -1,0 +1,151 @@
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("startBtn");
+const difficultySelect = document.getElementById("difficulty");
+const highScoreDisplay = document.getElementById("highScore");
+
+canvas.width = 400;
+canvas.height = 500;
+
+let animationId = null;
+let waitingForFirstJump = false;
+let bird, pipes, gravity, jumpPower, speedMultiplier;
+let gameStarted = false, score = 0, highScore = localStorage.getItem("flappyHighScore") || 0;
+highScoreDisplay.textContent = `High Score: ${highScore}`;
+
+let pipeInterval = null;  // ✅ PREVENT MULTIPLE INTERVALS
+
+function initializeGame() {
+    bird = { x: 50, y: 250, radius: 10, dy: 0, color: "cyan" };
+    pipes = [];
+    gravity = 0.5 * speedMultiplier;
+    jumpPower = -7 * speedMultiplier;
+    score = 0;
+    waitingForFirstJump = true;   
+}
+
+document.addEventListener("keydown", (e) => { 
+    if (e.key === " ") {
+        waitingForFirstJump = false;
+        bird.dy = jumpPower;
+    }
+});
+
+document.addEventListener("click", () => { 
+    waitingForFirstJump = false;
+    bird.dy = jumpPower;
+});
+
+canvas.addEventListener("touchstart", () => {
+    waitingForFirstJump = false;
+    bird.dy = jumpPower;
+});
+
+
+function spawnPipe() {
+    let gap = 100;
+    let pipeHeight = Math.floor(Math.random() * (canvas.height - gap - 50)) + 20;
+    pipes.push({ x: canvas.width, y: 0, width: 50, height: pipeHeight, passed: false });
+    pipes.push({ x: canvas.width, y: pipeHeight + gap, width: 50, height: canvas.height - pipeHeight - gap, passed: false });
+}
+
+function moveBird() {
+    if (waitingForFirstJump) return;
+    bird.dy += gravity;
+    bird.y += bird.dy;
+    if (bird.y + bird.radius > canvas.height) gameOver();
+}
+
+function movePipes() {
+    pipes.forEach(pipe => { pipe.x -= 3 * speedMultiplier; });
+    if (pipes.length > 0 && pipes[0].x + pipes[0].width < 0) pipes.splice(0, 2);
+}
+
+function checkCollision() {
+    pipes.forEach(pipe => {
+        if (
+            bird.x + bird.radius > pipe.x &&
+            bird.x - bird.radius < pipe.x + pipe.width &&
+            bird.y - bird.radius < pipe.y + pipe.height &&
+            bird.y + bird.radius > pipe.y
+        ) {
+            gameOver();
+        }
+        if (!pipe.passed && pipe.x + pipe.width < bird.x) {
+            pipe.passed = true;
+            score++;
+        }
+    });
+}
+
+function gameOver() {
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("flappyHighScore", highScore);
+        highScoreDisplay.textContent = `High Score: ${highScore}`;
+    }
+
+    alert(`Game Over! Your Score: ${score}`);
+
+    clearInterval(pipeInterval);
+    pipeInterval = null;
+
+    cancelAnimationFrame(animationId);
+    animationId = null;
+
+    initializeGame();
+
+    // spawn pipes again
+    pipeInterval = setInterval(spawnPipe, 2000);
+
+    update(); // start fresh loop
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = bird.color;
+
+    ctx.beginPath();
+    ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.closePath();
+    
+    pipes.forEach(pipe => {
+        ctx.fillStyle = "cyan";
+        ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
+    });
+    
+    ctx.fillStyle = "white";
+    ctx.fillText(`Score: ${score}`, 20, 30);
+}
+
+function update() {
+    animationId = requestAnimationFrame(update);
+
+    moveBird();
+    movePipes();
+    checkCollision();
+    draw();
+}
+
+startBtn.addEventListener("click", () => {
+    speedMultiplier = difficultySelect.value === "easy" ? 1 : difficultySelect.value === "medium" ? 1.5 : 2;
+    
+    initializeGame();
+    gameStarted = true;
+
+    startBtn.style.display = "none";
+    difficultySelect.style.display = "none";
+    canvas.style.display = "block";
+
+   // spawn first pipe instantly
+spawnPipe();
+
+// start pipe loop
+if (!pipeInterval) {
+    pipeInterval = setInterval(spawnPipe, 2000);
+}
+
+update();
+
+});
